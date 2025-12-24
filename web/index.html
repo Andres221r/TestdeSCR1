@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Roblox Insights - Stepford County Railway</title>
+  <style>
+    body {
+      font-family: "Segoe UI", sans-serif;
+      background: #0b1120;
+      color: #e2e8f0;
+      margin: 0;
+      padding: 2rem;
+    }
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      display: grid;
+      gap: 1.5rem;
+    }
+    .card {
+      background: #111827;
+      border-radius: 16px;
+      padding: 1.5rem;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+    }
+    h1 {
+      font-size: 2rem;
+      margin: 0;
+    }
+    h2 {
+      margin-top: 0;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 1rem;
+    }
+    .stat {
+      background: #0f172a;
+      padding: 1rem;
+      border-radius: 12px;
+    }
+    .stat span {
+      display: block;
+      font-size: 0.85rem;
+      color: #94a3b8;
+    }
+    .stat strong {
+      font-size: 1.4rem;
+    }
+    .milestone {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+    }
+    .milestone:last-child {
+      border-bottom: none;
+    }
+    .tag {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 999px;
+      background: rgba(59, 130, 246, 0.2);
+      color: #60a5fa;
+      font-size: 0.8rem;
+      margin-left: 0.5rem;
+    }
+    .footer {
+      font-size: 0.85rem;
+      color: #94a3b8;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h1>Stepford County Railway - Monitor</h1>
+      <p class="footer">Actualizado en tiempo real desde la API de Roblox.</p>
+    </div>
+
+    <div class="card">
+      <h2>Estado actual</h2>
+      <div class="stats" id="stats"></div>
+    </div>
+
+    <div class="card">
+      <h2>Predicción y milestones</h2>
+      <div id="prediction"></div>
+      <div id="milestones"></div>
+    </div>
+
+    <div class="card">
+      <h2>Historial de versiones</h2>
+      <div id="versions"></div>
+    </div>
+  </div>
+
+  <script>
+    const fmt = new Intl.NumberFormat("es-ES");
+
+    async function loadStats() {
+      const latest = await fetch("/api/latest").then((res) => res.json());
+      const statsEl = document.getElementById("stats");
+      statsEl.innerHTML = "";
+
+      if (latest.status === "no_data") {
+        statsEl.innerHTML = "<p>No hay datos todavía.</p>";
+        return;
+      }
+
+      const items = [
+        ["Visitas", latest.visits],
+        ["Jugadores activos", latest.playing],
+        ["Favoritos", latest.favorites],
+        ["Likes", latest.up_votes],
+        ["Dislikes", latest.down_votes],
+        ["Versión", latest.version ?? "Sin detectar"],
+      ];
+
+      items.forEach(([label, value]) => {
+        const card = document.createElement("div");
+        card.className = "stat";
+        card.innerHTML = `<span>${label}</span><strong>${typeof value === "number" ? fmt.format(value) : value}</strong>`;
+        statsEl.appendChild(card);
+      });
+    }
+
+    async function loadPrediction() {
+      const prediction = await fetch("/api/prediction").then((res) => res.json());
+      const predictionEl = document.getElementById("prediction");
+
+      if (!prediction.predicted_at) {
+        predictionEl.innerHTML = "<p>No hay suficientes datos para predecir el próximo milestone.</p>";
+        return;
+      }
+
+      predictionEl.innerHTML = `
+        <p>Próximo milestone: <strong>${fmt.format(prediction.target_visits)}</strong> visitas.</p>
+        <p>Fecha estimada: <strong>${new Date(prediction.predicted_at).toLocaleString()}</strong></p>
+        <p>Crecimiento diario estimado: <strong>${fmt.format(Math.round(prediction.daily_growth))}</strong> visitas/día.</p>
+      `;
+    }
+
+    async function loadMilestones() {
+      const data = await fetch("/api/milestones").then((res) => res.json());
+      const container = document.getElementById("milestones");
+      container.innerHTML = "";
+      data.milestones.slice(-6).forEach((milestone) => {
+        const row = document.createElement("div");
+        row.className = "milestone";
+        const achieved = milestone.achieved_at
+          ? `Logrado: ${new Date(milestone.achieved_at).toLocaleString()}`
+          : milestone.predicted_at
+            ? `Estimado: ${new Date(milestone.predicted_at).toLocaleString()}`
+            : "En progreso";
+        row.innerHTML = `<span>${fmt.format(milestone.target_visits)} visitas</span><span>${achieved}</span>`;
+        container.appendChild(row);
+      });
+    }
+
+    async function loadVersions() {
+      const data = await fetch("/api/versions").then((res) => res.json());
+      const container = document.getElementById("versions");
+      container.innerHTML = "";
+      if (!data.versions.length) {
+        container.innerHTML = "<p>Sin versiones detectadas todavía.</p>";
+        return;
+      }
+      data.versions.slice(0, 5).forEach((version) => {
+        const row = document.createElement("div");
+        row.className = "milestone";
+        row.innerHTML = `<span>v${version.version}</span><span>${new Date(version.detected_at).toLocaleString()}</span>`;
+        container.appendChild(row);
+      });
+    }
+
+    async function refreshAll() {
+      await Promise.all([loadStats(), loadPrediction(), loadMilestones(), loadVersions()]);
+    }
+
+    refreshAll();
+    setInterval(refreshAll, 60000);
+  </script>
+</body>
+</html>
